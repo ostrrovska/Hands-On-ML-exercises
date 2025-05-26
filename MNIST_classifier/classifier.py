@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import GridSearchCV
 
 import os
 import struct
@@ -48,9 +49,17 @@ model = KNeighborsClassifier()
 X_train, y_train = load_train_data()
 X_test, y_test = load_test_data()
 
-model.fit(X_train, y_train)
+param_grid = {
+    'n_neighbors': [3, 5, 7, 9],
+    'weights': ['uniform', 'distance']
+}
 
-y_pred = model.predict(X_test)
+grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5)
+grid_search.fit(X_train, y_train)
+
+best_model = grid_search.best_estimator_
+
+y_pred = best_model.predict(X_test)
 
 print(accuracy_score(y_test, y_pred))
 
