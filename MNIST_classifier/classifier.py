@@ -3,8 +3,9 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import GridSearchCV
-
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.ndimage import shift
+from scipy.stats import randint
 import os
 import struct
 
@@ -44,24 +45,60 @@ def load_test_data():
     except FileNotFoundError:
         raise Exception("MNIST ubyte files not found. Please ensure they are in the correct directory.")
 
+def shift_image_by_one(image, direction):
+    """Shift image by one pixel in the specified direction.
+    direction should be a tuple indicating the shift in each dimension"""
+    return shift(image.reshape(28, 28), direction, cval=0).reshape(784)
 
 model = KNeighborsClassifier()
 X_train, y_train = load_train_data()
 X_test, y_test = load_test_data()
 
+# Create shifted versions of training images
+X_train_augmented = []
+y_train_augmented = []
+
+print("Augmenting training data with shifted images...")
+for idx, image in enumerate(X_train):
+    # Add original image
+    X_train_augmented.append(image)
+    y_train_augmented.append(y_train[idx])
+    
+    # Add shifted versions
+    shifts = [(0, 1), (0, -1)]  # down, up
+    for direction in shifts:
+        X_train_augmented.append(shift_image_by_one(image, direction))
+        y_train_augmented.append(y_train[idx])
+
+X_train_augmented = np.array(X_train_augmented)
+y_train_augmented = np.array(y_train_augmented)
+
+print(f"Training set expanded from {len(X_train)} to {len(X_train_augmented)} images")
+
 param_grid = {
-    'n_neighbors': [3, 5, 7, 9],
+    'n_neighbors': randint(low=3, high=50),
     'weights': ['uniform', 'distance']
 }
 
-grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5)
-grid_search.fit(X_train, y_train)
+print("Starting RandomizedSearchCV...")
+random_search = RandomizedSearchCV(
+    estimator=model, 
+    param_distributions=param_grid, 
+    n_iter=10, 
+    cv=5,
+    verbose=2    # Show detailed progress
+)
+random_search.fit(X_train_augmented, y_train_augmented)
 
-best_model = grid_search.best_estimator_
+best_model = random_search.best_estimator_
+print("\nSearch completed!")
+print(f"Best parameters: {random_search.best_params_}")
+print(f"Best cross-validation score: {random_search.best_score_:.4f}")
 
 y_pred = best_model.predict(X_test)
 
-print(accuracy_score(y_test, y_pred))
+print(f"\nFinal test set accuracy: {accuracy_score(y_test, y_pred):.4f}")
+print(f"Total number of training samples used: {len(X_train_augmented)}")
 
 
 
